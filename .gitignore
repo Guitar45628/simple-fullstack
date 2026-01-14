@@ -1,0 +1,29 @@
+# Environments
+.env
+.env.local
+.env.*.local
+
+# Database Data (if using bind mount)
+pgdata/
+
+# Dependency directories
+node_modules/
+backend/vendor/
+
+# Build outputs
+dist/
+build/
+backend/main
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Docker
+.docker-compose.persistent
