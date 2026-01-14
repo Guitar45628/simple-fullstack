@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from './api';
 import { useNavigate } from 'react-router-dom';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 const SITES = [
   { name: 'Google', color: '#8884d8' },
@@ -19,16 +18,11 @@ const SITES = [
 function Dashboard() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  const [data, setData] = useState([]);
   const [currentPings, setCurrentPings] = useState({});
 
   // Simulate Ping Data
   useEffect(() => {
     const interval = setInterval(() => {
-      const now = new Date();
-      const timeStr = now.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      
-      const newPoint = { time: timeStr };
       const newPings = {};
 
       SITES.forEach(site => {
@@ -37,17 +31,10 @@ function Dashboard() {
         const spike = Math.random() > 0.9 ? Math.floor(Math.random() * 100) : 0;
         const totalPing = basePing + spike;
         
-        newPoint[site.name] = totalPing;
         newPings[site.name] = totalPing;
       });
 
       setCurrentPings(newPings);
-      setData(prevData => {
-        const newData = [...prevData, newPoint];
-        if (newData.length > 20) return newData.slice(newData.length - 20); // Keep last 20 points
-        return newData;
-      });
-
     }, 2000); // Update every 2 seconds
 
     return () => clearInterval(interval);
@@ -135,41 +122,6 @@ function Dashboard() {
               </div>
             </div>
           ))}
-        </div>
-
-        {/* Chart Section */}
-        <div className="bg-slate-900 rounded-xl p-6 border border-slate-800 shadow-xl">
-          <h3 className="text-lg font-medium text-slate-200 mb-6">Latency History (Last 60s)</h3>
-          <div className="h-[400px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart
-                data={data}
-                margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
-                <XAxis dataKey="time" stroke="#94a3b8" tick={{fontSize: 12}} />
-                <YAxis stroke="#94a3b8" tick={{fontSize: 12}} label={{ value: 'ms', angle: -90, position: 'insideLeft', fill: '#94a3b8' }} />
-                <Tooltip 
-                  contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f8fafc' }}
-                  itemStyle={{ fontSize: '12px' }}
-                />
-                <Legend wrapperStyle={{ paddingTop: '20px' }} />
-                
-                {SITES.map((site) => (
-                  <Line
-                    key={site.name}
-                    type="monotone"
-                    dataKey={site.name}
-                    stroke={site.color}
-                    strokeWidth={2}
-                    dot={false}
-                    activeDot={{ r: 6 }}
-                    animationDuration={500}
-                  />
-                ))}
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
         </div>
 
       </main>
