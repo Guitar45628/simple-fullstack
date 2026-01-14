@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data_prod:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    image: ghcr.io/guitar45628/simple-fullstack-backend:latest
+    restart: always
+    environment:
+      # เชื่อมต่อ DB ภายใน Docker Network (host=db)
+      DATABASE_URL: "host=db user=${POSTGRES_USER} password=${POSTGRES_PASSWORD} dbname=${POSTGRES_DB} port=5432 sslmode=disable"
+      JWT_SECRET: ${JWT_SECRET}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    image: ghcr.io/guitar45628/simple-fullstack-frontend:latest
+    restart: always
+    ports:
+      - "80:80"  # เปิดพอร์ต 80 ให้โลกภายนอกเข้าถึง
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data_prod:
