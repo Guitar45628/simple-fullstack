@@ -4,10 +4,14 @@ import (
 	"net/http"
 	"os"
 	"time"
+	"fmt"
+	"runtime"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/shirou/gopsutil/v3/cpu"
+	"github.com/shirou/gopsutil/v3/mem"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -72,7 +76,37 @@ func main() {
 		api.POST("/logout", logout)
 	}
 
+	protected := r.Group("/api")
+	protected.Use(authMiddleware())
+	{
+		protected.GET("/system-stats", getSystemStats)
+	}
+
 	r.Run(":8080")
+}
+
+func authMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		tokenString, err := c.Cookie("token")
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+			return
+		}
+
+		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+			}
+			return jwtKey, nil
+		})
+
+		if err != nil || !token.Valid {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+			return
+		}
+
+		c.Next()
+	}
 }
 
 func register(c *gin.Context) {
@@ -137,3 +171,50 @@ func logout(c *gin.Context) {
 	c.SetCookie("token", "", -1, "/", "", false, true)
 	c.JSON(http.StatusOK, gin.H{"message": "Logout successful"})
 }
+
+func getSystemStats(c *gin.Context) {
+	// 1. Backend Resources
+	v, _ := mem.VirtualMemory()
+	cPercentages, _ := cpu.Percent(0, false)
+	cpuPercent := 0.0
+	if len(cPercentages) > 0 {
+		cpuPercent = cPercentages[0]
+	}
+
+	// Go Runtime Stats
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+
+	// 2. Database Stats
+	sqlDB, err := db.DB()
+	dbStats := make(map[string]interface{})
+	if err == nil {
+		stats := sqlDB.Stats()
+		dbStats["open_connections"] = stats.OpenConnections
+		dbStats["in_use"] = stats.InUse
+		dbStats["idle"] = stats.Idle
+		
+		// Query DB Version as a ping check
+		var version string
+		db.Raw("SELECT version()").Scan(&version)
+		dbStats["version"] = version
+		dbStats["status"] = "connected"
+	} else {
+		dbStats["status"] = "disconnected"
+		dbStats["error"] = err.Error()
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"backend": gin.H{
+			"cpu_percent":   cpuPercent,
+			"memory_total_mb": v.Total / 1024 / 1024,
+			"memory_used_mb":  v.Used / 1024 / 1024,
+			"memory_percent": v.UsedPercent,
+			"goroutines":    runtime.NumGoroutine(),
+			"go_alloc_mb":   m.Alloc / 1024 / 1024,
+		},
+		"database": dbStats,
+		"timestamp": time.Now().Format(time.RFC3339),
+	})
+}
+
